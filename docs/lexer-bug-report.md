@@ -1,21 +1,46 @@
-# Lexer bug report (Member 2)
+# Lexer Bug Report — Member 2
 
-Run: `ctest --test-dir build --output-on-failure` -> scanner tests: **19 passed, 1 failed**
+> AI disclosure: AI was used for documentation formatting. Test results were run and verified by the member.
 
-## BUG-1: unterminated block comment accepted silently
-- Test: `invalid/invalid07.txt` (comment opens on line 3, never closes)
-- Expected: an INVALID token at the comment start (3:1), exit code 2
-- Actual: comment swallows the rest of the file, no INVALID token, exit code 0
-- Where: `lexer.cpp`, `skipWhitespaceAndComments()`, block-comment branch (the loop ends at EOF with no error)
-- Suggested fix: add a `bool unterminatedComment` plus its line/col as members in `lexer.h`; set them in that branch; at the top of `getNextToken()` return `{TokenType::INVALID, "/*", line, col}` when set.
+Run command:
 
-## BUG-2 (minor): non-ASCII input is split into single bytes
-- Test: `invalid/invalid09.txt` (`int café = 1;`)
-- Expected: one INVALID token for `é`
-- Actual: two INVALID tokens, each one raw byte (0xC3, 0xA9), so stdout contains invalid UTF-8
-- Where: `lexer.cpp`, last lines of `getNextToken()` (unknown character branch)
-- Suggested fix: when the byte is >= 0x80, also consume following continuation bytes (`(b & 0xC0) == 0x80`) into one lexeme.
+```bash
+sh test/scanner/run_tests.sh /path/to/compiler
+```
 
-## Spec decisions to confirm (not bugs)
-- `.5` lexes as `.` `5`; `1.` as `1` `.`; `5..3` as `5` `.` `.` `3`.
-- Keyword list and the two-character operator list are guesses (see docs/token-spec.md).
+| Test stage | Result |
+|---|---|
+| Before BUG-1 fix | passed 19, failed 1 |
+| After BUG-1 fix | **passed 20, failed 0** |
+
+## BUG-1: Unterminated block comment accepted silently
+
+**Status: FIXED and verified.**
+
+- Test file: `test/scanner/invalid/invalid07.txt` (a comment opens on line 2 and never closes)
+- Expected: an `INVALID` token at the start of the comment (`2:1`) and exit code `2`
+- Original behavior: the comment swallowed the rest of the file, no `INVALID` token was produced, and the exit code was `0`
+- Where: `src/lexer/Lexer.cpp`, `skipWhitespaceAndComments()`, block-comment branch. The loop reached end of file without reporting an error.
+- Resolution: The lexer was updated to detect an unterminated block comment and report it as an `INVALID` token at the opening comment location.
+
+Verification after the fix:
+
+| Input | Result |
+|---|---|
+| `invalid07.txt` | `INVALID(/*) 2:1`, exit code 2 |
+| `/* ok */ int x;` | no `INVALID` token, exit code 0 |
+| `/**/ int y;` | no `INVALID` token, exit code 0 |
+| `/*` alone | `INVALID(/*) 1:1`, exit code 2 |
+
+Full scanner test run: **passed 20, failed 0**.
+
+## Draft specification decisions to confirm
+
+These are not bugs. They are choices the lexer currently makes that the lecturer's
+specification may change.
+
+- `.5` is lexed as `.` followed by `5` (not a float).
+- `1.` is lexed as `1` followed by `.`.
+- `5..3` is lexed as `5`, `.`, `.`, `3`.
+- Character literals such as `'a'` are not supported and are reported as `INVALID`.
+- The keyword list and the two-character operator list are working assumptions (see `docs/token-spec.md`).
