@@ -1,7 +1,5 @@
-/*
-AI disclosure: Starter outline only. 
-The logic in this file was written by Prince Osei Tweneboah Ababio.
-*/
+// AI disclosure: AI was used for conceptual debugging guidance.
+// The member reviewed, implemented, tested, and can explain this code.
 
 
 #include "lexer.h"
@@ -24,7 +22,8 @@ static char charAt(const std::string& s, size_t pos, size_t off) {
 
 // 1. constructor, isAtEnd, peek, advance ---------------------------------
 Lexer::Lexer(const std::string& source)
-    : src(source), pos(0), line(1), column(1) {
+    : src(source), pos(0), line(1), column(1),
+      unterminatedComment(false), commentStartLine(0), commentStartColumn(0) {
 }
 
 bool Lexer::isAtEnd() const {
@@ -51,9 +50,15 @@ void Lexer::skipWhitespaceAndComments() {
         } else if (c == '/' && charAt(src, pos, 1) == '/') {
             while (!isAtEnd() && peek() != '\n') advance();
         } else if (c == '/' && charAt(src, pos, 1) == '*') {
+            commentStartLine = line;        // save BEFORE consuming "/*"
+            commentStartColumn = column;
             advance(); advance();
             while (!isAtEnd() && !(peek() == '*' && charAt(src, pos, 1) == '/')) advance();
-            if (!isAtEnd()) { advance(); advance(); }
+            if (!isAtEnd()) {
+                advance(); advance();       // found */
+            } else {
+                unterminatedComment = true; // hit EOF first
+            }
         } else {
             break;
         }
@@ -105,6 +110,11 @@ Token Lexer::readNumber() {
 // 5. getNextToken + INVALID handling ---------------------------------------
 Token Lexer::getNextToken() {
     skipWhitespaceAndComments();
+
+    if (unterminatedComment) {              // must come before isAtEnd()
+        unterminatedComment = false;        // report only once
+        return {TokenType::INVALID, "/*", commentStartLine, commentStartColumn};
+    }
 
     if (isAtEnd()) return {TokenType::END_OF_FILE, "", line, column};
 
