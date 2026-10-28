@@ -1,0 +1,2 @@
+float price = 2.5;
+int count;
